@@ -107,8 +107,11 @@ class StoreAPicture(webapp2.RequestHandler):
 	encoded=encoded.replace('\"','')
 	encoded += "=" * ((4 - len(encoded) % 4) % 4)
 	logging.info('image after padding %s', encoded)
+	try:
+		decoded = base64.b64decode(encoded[:-2])
+	except Exception:
+		decoded=encoded
 
-	decoded = base64.b64decode(encoded[:-2])
 	logging.info('image after decoding %s', decoded)		
 	self.store_a_picture(tag,decoded, encoded)     
 class DeleteEntry(webapp2.RequestHandler):
@@ -245,9 +248,9 @@ def storePic(tag, picture, value, bCheckIfTagExists=True):
 		entry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", tag).get()
 		if entry:
 		  entry.value = value
-		else: entry = StoredPicture(tag = tag , picture = picture, value = value)
+		else: entry = StoredPicture(tag = tag , value = value)
 	else:
-		entry = StoredPicture(tag = tag, picture = picture, value = value)
+		entry = StoredPicture(tag = tag,  value = value)
 	entry.put()	
 def trimdb():
 	## If there are more than the max number of entries, flush the
