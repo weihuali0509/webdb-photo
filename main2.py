@@ -37,11 +37,13 @@ class StoredData(db.Model):
   date = db.DateTimeProperty(required=True, auto_now=True)
 class StoredPicture(db.Model):
 	tag = db.StringProperty()
-	picture = db.BlobProperty()
+	# picture = db.BlobProperty()
 	value = db.TextProperty()
 	date = db.DateTimeProperty(required=True, auto_now=True)
 
 	def url_for(self):
+		logging.info("self.key()")
+
 		return "/image/%d" % self.key().id()
 
 class StoreAValue(webapp2.RequestHandler):
@@ -100,17 +102,16 @@ class StoreAPicture(webapp2.RequestHandler):
 	if self.request.get('fmt') == "html":
 		encoded = picture.encode("base64")
 	else:
-		encoded = picture
-	encoded=encoded.replace('\\n','')
-	encoded=encoded.replace('\\','')
-	encoded=encoded.replace(' ','')	
-	encoded=encoded.replace('\"','')
+		encoded = picture[1:-3]
+	logging.info('image before decoding %s', encoded)
 	encoded += "=" * ((4 - len(encoded) % 4) % 4)
 	logging.info('image after padding %s', encoded)
 
 	decoded = base64.b64decode(encoded[:-2])
+	logging.info('image after encoding %s', encoded)
 	logging.info('image after decoding %s', decoded)		
 	self.store_a_picture(tag,decoded, encoded)     
+
 class DeleteEntry(webapp2.RequestHandler):
 
   def post(self):
@@ -153,9 +154,9 @@ class GetPictureHandler(webapp2.RequestHandler):
 
   def get_picture(self, tag):
 	entry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", tag).get()
-	if entry:
-	   picture = entry.picture
-	else: picture = ""
+	# if entry:
+	#    picture = entry.picture
+	# else: picture = ""
 	if self.request.get('fmt') == "html":
 		WritePicToWeb(self, entry)
 	else:
@@ -210,15 +211,12 @@ def WritePicToWeb(handler, entry):
 
 def WritePicToPhone(handler, entry):
 	handler.response.headers['Content-Type'] = 'application/jsonrequest'
-	logging.info(entry.value);
-	logging.info(entry.tag);
-	logging.info(entry);
 	json.dump(["PICTURE", entry.tag, entry.value], handler.response.out)
 
 
 def WritePicToPhoneAfterStore(handler, entry):
 	handler.response.headers['Content-Type'] = 'application/jsonrequest'
-	json.dump(["STORED", entry.tag, entry.url_for], handler.response.out)
+	json.dump(["STORED", entry.tag, entry.value], handler.response.out)
 
 
 # db utilities from Dean
@@ -239,15 +237,18 @@ def store(tag, value, bCheckIfTagExists=True):
 	entry.put()		
 	
 
-def storePic(tag, picture, value, bCheckIfTagExists=True):
+def storePic(tag, picture, val, bCheckIfTagExists=True):
 	if bCheckIfTagExists:
 		# There's a potential readers/writers error here :(
 		entry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", tag).get()
 		if entry:
-		  entry.value = value
-		else: entry = StoredPicture(tag = tag , picture = picture, value = value)
+		  entry.value = val
+		# else: entry = StoredPicture(tag = tag , picture = picture, value = val)
+		else: 
+			entry = StoredPicture(tag = tag, value = val)
 	else:
-		entry = StoredPicture(tag = tag, picture = picture, value = value)
+		# entry = StoredPicture(tag = tag, picture = picture, value = val)
+		entry = StoredPicture(tag = tag, value = val)
 	entry.put()	
 def trimdb():
 	## If there are more than the max number of entries, flush the
@@ -313,7 +314,7 @@ class ImageHandler(webapp2.RequestHandler):
 		requestedImage = StoredPicture.get_by_id(int(image_id))
 		if requestedImage is not None:
 			self.response.headers['Content-Type'] = 'image/jpeg'
-			self.response.out.write(requestedImage.picture)
+			#self.response.out.write(requestedImage.picture)
 ### Assign the classes to the URL's
 
 app = webapp2.WSGIApplication ([('/', MainPage),

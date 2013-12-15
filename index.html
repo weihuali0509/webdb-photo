@@ -89,6 +89,7 @@ for Android</a> app. App Inventor apps can access this service using the TinyWeb
 	<table border=1>
 	  <tr>
 		 <th>Key</th>
+		 <th>pic</th>
 		 <th>Value</th>
 		 <th>Created (GMT)</th>
 	  </tr>
@@ -96,7 +97,8 @@ for Android</a> app. App Inventor apps can access this service using the TinyWeb
 	  <tr>
 	    <td>{{picEntry.tag}}</td>
 		<td><img style="height:100px;width:100px" src="{{picEntry.url_for}}"></td>
-		<td><font size="-1">{{picEntry.date}}</font></td>          
+		<td>{{picEntry.value}} </td>
+		<td><font size="-1">{{picEntry.date}}</font></td>  
 	  	<td><form action="/deleteentry" method="post"
 			enctype=application/x-www-form-urlencoded>
 		<input type="hidden" name="entry_key_string" value="{{entry.key}}">
