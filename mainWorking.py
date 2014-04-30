@@ -38,7 +38,6 @@ class StoredData(db.Model):
 class StoredPicture(db.Model):
 	tag = db.StringProperty()
 	picture = db.BlobProperty()
-	extension = db.StringProperty()
 	value = db.TextProperty()
 	date = db.DateTimeProperty(required=True, auto_now=True)
 
@@ -74,15 +73,15 @@ class StoreAValue(webapp2.RequestHandler):
 
 class StoreAPicture(webapp2.RequestHandler):
 
-  def store_a_picture(self, tag, picture, val, extension):
-	storePic(tag, picture, val, extension)
+  def store_a_picture(self, tag, picture, val):
+	storePic(tag, picture, val)
 	# call trimdb if you want to limit the size of db
 	# trimdb()
 	
 	## Send back a confirmation message.  The TinyWebDB component ignores
 	## the message (other than to note that it was received), but other
 	## components might use this.
-	result = ["STORED", tag, val]
+	result = ["STORED", tag, picture]
 	
 	## When I first implemented this, I used  json.JSONEncoder().encode(picture)
 	## rather than json.dump.  That didn't work: the component ended up
@@ -97,9 +96,7 @@ class StoreAPicture(webapp2.RequestHandler):
   def post(self):
 	tag = self.request.get('tag')
 	picture = self.request.get('pic')
-	logging.info(self.request)
-	extension = self.request.get('ext')
-	logging.info(extension)
+
 	if self.request.get('fmt') == "html":
 		encoded = picture.encode("base64")
 	else:
@@ -116,7 +113,7 @@ class StoreAPicture(webapp2.RequestHandler):
 		decoded=encoded
 
 	logging.info('image after decoding %s', decoded)		
-	self.store_a_picture(tag,decoded, encoded, extension)     
+	self.store_a_picture(tag,decoded, encoded)     
 class DeleteEntry(webapp2.RequestHandler):
 
   def post(self):
@@ -216,16 +213,15 @@ def WritePicToWeb(handler, entry):
 
 def WritePicToPhone(handler, entry):
 	handler.response.headers['Content-Type'] = 'application/jsonrequest'
-	
-	logging.info(entry.tag);
 	logging.info(entry.value);
-	logging.info(entry.extension);
-	json.dump(["PICTURE", entry.tag, entry.value, entry.extension], handler.response.out)
+	logging.info(entry.tag);
+	logging.info(entry);
+	json.dump(["PICTURE", entry.tag, entry.value], handler.response.out)
 
 
 def WritePicToPhoneAfterStore(handler, entry):
 	handler.response.headers['Content-Type'] = 'application/jsonrequest'
-	json.dump(["STORED", entry.tag, entry.value, entry.extension], handler.response.out)
+	json.dump(["STORED", entry.tag, entry.url_for], handler.response.out)
 
 
 # db utilities from Dean
@@ -246,16 +242,15 @@ def store(tag, value, bCheckIfTagExists=True):
 	entry.put()		
 	
 
-def storePic(tag, picture, value, extension,  bCheckIfTagExists=True):
+def storePic(tag, picture, value, bCheckIfTagExists=True):
 	if bCheckIfTagExists:
 		# There's a potential readers/writers error here :(
 		entry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", tag).get()
 		if entry:
 		  entry.value = value
-		  entry.extension = extension
-		else: entry = StoredPicture(tag = tag , value = value, extension = extension)
+		else: entry = StoredPicture(tag = tag , value = value)
 	else:
-		entry = StoredPicture(tag = tag,  value = value, extension = extension)
+		entry = StoredPicture(tag = tag,  value = value)
 	entry.put()	
 def trimdb():
 	## If there are more than the max number of entries, flush the

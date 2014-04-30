@@ -37,13 +37,12 @@ class StoredData(db.Model):
   date = db.DateTimeProperty(required=True, auto_now=True)
 class StoredPicture(db.Model):
 	tag = db.StringProperty()
-	# picture = db.BlobProperty()
+	picture = db.BlobProperty()
+	extension = db.StringProperty()
 	value = db.TextProperty()
 	date = db.DateTimeProperty(required=True, auto_now=True)
 
 	def url_for(self):
-		logging.info("self.key()")
-
 		return "/image/%d" % self.key().id()
 
 class StoreAValue(webapp2.RequestHandler):
@@ -75,15 +74,15 @@ class StoreAValue(webapp2.RequestHandler):
 
 class StoreAPicture(webapp2.RequestHandler):
 
-  def store_a_picture(self, tag, picture, val):
-	storePic(tag, picture, val)
+  def store_a_picture(self, tag, picture, val, extension):
+	storePic(tag, picture, val, extension)
 	# call trimdb if you want to limit the size of db
 	# trimdb()
 	
 	## Send back a confirmation message.  The TinyWebDB component ignores
 	## the message (other than to note that it was received), but other
 	## components might use this.
-	result = ["STORED", tag, picture]
+	result = ["STORED", tag, val]
 	
 	## When I first implemented this, I used  json.JSONEncoder().encode(picture)
 	## rather than json.dump.  That didn't work: the component ended up
@@ -98,20 +97,26 @@ class StoreAPicture(webapp2.RequestHandler):
   def post(self):
 	tag = self.request.get('tag')
 	picture = self.request.get('pic')
-
+	logging.info(self.request)
+	extension = self.request.get('ext')
+	logging.info(extension)
 	if self.request.get('fmt') == "html":
 		encoded = picture.encode("base64")
 	else:
-		encoded = picture[1:-3]
-	logging.info('image before decoding %s', encoded)
+		encoded = picture
+	encoded=encoded.replace('\\n','')
+	encoded=encoded.replace('\\','')
+	encoded=encoded.replace(' ','')	
+	encoded=encoded.replace('\"','')
 	encoded += "=" * ((4 - len(encoded) % 4) % 4)
 	logging.info('image after padding %s', encoded)
+	try:
+		decoded = base64.b64decode(encoded[:-2])
+	except Exception:
+		decoded=encoded
 
-	decoded = base64.b64decode(encoded[:-2])
-	logging.info('image after encoding %s', encoded)
 	logging.info('image after decoding %s', decoded)		
-	self.store_a_picture(tag,decoded, encoded)     
-
+	self.store_a_picture(tag,decoded, encoded, extension)     
 class DeleteEntry(webapp2.RequestHandler):
 
   def post(self):
@@ -154,9 +159,9 @@ class GetPictureHandler(webapp2.RequestHandler):
 
   def get_picture(self, tag):
 	entry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", tag).get()
-	# if entry:
-	#    picture = entry.picture
-	# else: picture = ""
+	if entry:
+	   picture = entry.picture
+	else: picture = ""
 	if self.request.get('fmt') == "html":
 		WritePicToWeb(self, entry)
 	else:
@@ -211,12 +216,16 @@ def WritePicToWeb(handler, entry):
 
 def WritePicToPhone(handler, entry):
 	handler.response.headers['Content-Type'] = 'application/jsonrequest'
-	json.dump(["PICTURE", entry.tag, entry.value], handler.response.out)
+	
+	logging.info(entry.tag);
+	logging.info(entry.value);
+	logging.info(entry.extension);
+	json.dump(["PICTURE", entry.tag, entry.value, entry.extension], handler.response.out)
 
 
 def WritePicToPhoneAfterStore(handler, entry):
 	handler.response.headers['Content-Type'] = 'application/jsonrequest'
-	json.dump(["STORED", entry.tag, entry.value], handler.response.out)
+	json.dump(["STORED", entry.tag, entry.value, entry.extension], handler.response.out)
 
 
 # db utilities from Dean
@@ -237,18 +246,16 @@ def store(tag, value, bCheckIfTagExists=True):
 	entry.put()		
 	
 
-def storePic(tag, picture, val, bCheckIfTagExists=True):
+def storePic(tag, picture, value, extension,  bCheckIfTagExists=True):
 	if bCheckIfTagExists:
 		# There's a potential readers/writers error here :(
 		entry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", tag).get()
 		if entry:
-		  entry.value = val
-		# else: entry = StoredPicture(tag = tag , picture = picture, value = val)
-		else: 
-			entry = StoredPicture(tag = tag, value = val)
+		  entry.value = value
+		  entry.extension = extension
+		else: entry = StoredPicture(tag = tag , value = value, extension = extension)
 	else:
-		# entry = StoredPicture(tag = tag, picture = picture, value = val)
-		entry = StoredPicture(tag = tag, value = val)
+		entry = StoredPicture(tag = tag,  value = value, extension = extension)
 	entry.put()	
 def trimdb():
 	## If there are more than the max number of entries, flush the
@@ -314,7 +321,7 @@ class ImageHandler(webapp2.RequestHandler):
 		requestedImage = StoredPicture.get_by_id(int(image_id))
 		if requestedImage is not None:
 			self.response.headers['Content-Type'] = 'image/jpeg'
-			#self.response.out.write(requestedImage.picture)
+			self.response.out.write(requestedImage.picture)
 ### Assign the classes to the URL's
 
 app = webapp2.WSGIApplication ([('/', MainPage),
