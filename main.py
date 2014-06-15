@@ -104,8 +104,10 @@ class StoreAPicture(webapp2.RequestHandler):
 	tag = self.request.get('tag')
 	picture = self.request.get('pic')
 	logging.info(self.request)
+
 	extension = self.request.get('ext')
-	logging.info(extension)
+	# logging.info(extension)
+	
 	if self.request.get('fmt') == "html":
 		encoded = picture.encode("base64")
 	else:
@@ -115,14 +117,16 @@ class StoreAPicture(webapp2.RequestHandler):
 	encoded=encoded.replace(' ','')	
 	encoded=encoded.replace('\"','')
 	encoded += "=" * ((4 - len(encoded) % 4) % 4)
-	logging.info('the tage of image is %s', tag)
-	logging.info('image after padding %s', encoded)
+
+	# logging.info('the tage of image is %s', tag)
+	# logging.info('image after padding %s', encoded)
+
 	try:
 		decoded = base64.b64decode(encoded[:-2])
 	except Exception:
 		decoded=encoded
 
-	logging.info('image after decoding %s', decoded)		
+	# logging.info('image after decoding %s', decoded)		
 	self.store_a_picture(tag,decoded, encoded, extension) 
 
 class DeleteEntry(webapp2.RequestHandler):
@@ -133,6 +137,7 @@ class DeleteEntry(webapp2.RequestHandler):
 	entry_key_string = self.request.get('entry_key_string')
 	key = db.Key(entry_key_string)
 	tag = self.request.get('tag')
+	
 	if tag.startswith("http"):
 	  DeleteUrl(tag)
 	db.run_in_transaction(dbSafeDelete,key)
@@ -226,10 +231,10 @@ def WritePicToWeb(handler, entry):
 def WritePicToPhone(handler, entry):
 	handler.response.headers['Content-Type'] = 'application/jsonrequest'
 	
-	logging.info(entry.tag);
-	logging.info(entry.value);
-	logging.info(entry.extension);
-	logging.info(entry.split);
+	# logging.info(entry.tag);
+	# logging.info(entry.value);
+	# logging.info(entry.extension);
+	# logging.info(entry.split);
 
 	if(entry.split != True):
 		json.dump(["PICTURE", entry.tag, entry.value, entry.extension], handler.response.out)
@@ -237,7 +242,7 @@ def WritePicToPhone(handler, entry):
 		listOfTag = entry.value.split(',')
 		newValue = ''
 
-		logging.info('The list of tags is '+','.join(listOfTag))
+		# logging.info('The list of tags is '+','.join(listOfTag))
 		for splitTag in listOfTag:
 			splitEntry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", splitTag).get()
 			newValue = newValue + splitEntry.value
@@ -247,9 +252,9 @@ def WritePicToPhone(handler, entry):
 def WritePicToPhoneAfterStore(handler, entry):
 	handler.response.headers['Content-Type'] = 'application/jsonrequest'
 
-	logging.info(entry.tag);
-	logging.info(entry.value);
-	logging.info(entry.extension);
+	# logging.info(entry.tag);
+	# logging.info(entry.value);
+	# logging.info(entry.extension);
 	json.dump(["STORED", entry.tag, entry.value, entry.extension], handler.response.out)
 
 # db utilities from Dean
@@ -280,7 +285,7 @@ def storePic(tag, picture, value, extension,  bCheckIfTagExists=True):
 		  return
 		else: 
 			allString = tag + value + extension
-			logging.info("The length of the entry is "+str(len(allString)))
+			# logging.info("The length of the entry is "+str(len(allString)))
 
 			#9000 is the upper limit of the file entry < 1MB
 			if len(value) < 900000:
