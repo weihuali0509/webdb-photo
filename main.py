@@ -32,6 +32,7 @@ import re
 import sys
 import math
 import json
+import uuid
 
 max_entries = 1000
 
@@ -45,6 +46,7 @@ class StoredPicture(db.Model):
 	picture = db.BlobProperty()
 	extension = db.StringProperty()
 	value = db.TextProperty()
+	uuid = db.StringProperty()
 	split = db.BooleanProperty()
 	date = db.DateTimeProperty(required=True, auto_now=True)
 
@@ -72,7 +74,6 @@ class StoreAValue(webapp2.RequestHandler):
 	else:
 		WriteToPhoneAfterStore(self,tag,value)
 	
-
   def post(self):
 	tag = self.request.get('tag')
 	value = self.request.get('value')
@@ -80,8 +81,8 @@ class StoreAValue(webapp2.RequestHandler):
 
 class StoreAPicture(webapp2.RequestHandler):
 
-  def store_a_picture(self, tag, picture, val, extension):
-	storePic(tag, picture, val, extension)
+  def store_a_picture(self, tag, picture, val, extension, uuid):
+	storePic(tag, picture, val, extension, uuid)
 	# call trimdb if you want to limit the size of db
 	# trimdb()
 	
@@ -99,7 +100,6 @@ class StoreAPicture(webapp2.RequestHandler):
 	# else:
 	# 	WritePicToPhoneAfterStore(self,entry)
 	
-
   def post(self):
 	tag = self.request.get('tag')
 	picture = self.request.get('pic')
@@ -112,6 +112,7 @@ class StoreAPicture(webapp2.RequestHandler):
 		encoded = picture.encode("base64")
 	else:
 		encoded = picture
+
 	encoded=encoded.replace('\\n','')
 	encoded=encoded.replace('\\','')
 	encoded=encoded.replace(' ','')	
@@ -126,8 +127,9 @@ class StoreAPicture(webapp2.RequestHandler):
 	except Exception:
 		decoded=encoded
 
+	imageUUID = str(uuid.uuid4())
 	# logging.info('image after decoding %s', decoded)		
-	self.store_a_picture(tag,decoded, encoded, extension) 
+	self.store_a_picture(tag,decoded, encoded, extension, imageUUID) 
 
 class DeleteEntry(webapp2.RequestHandler):
 
@@ -142,7 +144,6 @@ class DeleteEntry(webapp2.RequestHandler):
 	  DeleteUrl(tag)
 	db.run_in_transaction(dbSafeDelete,key)
 	self.redirect('/')
-
 
 class GetValueHandler(webapp2.RequestHandler):
 
@@ -170,8 +171,8 @@ class GetValueHandler(webapp2.RequestHandler):
 
 class GetPictureHandler(webapp2.RequestHandler):
 
-  def get_picture(self, tag):
-	entry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", tag).get()
+  def get_picture(self, uuid):
+	entry = db.GqlQuery("SELECT * FROM StoredPicture where uuid = :1", uuid).get()
 	if entry:
 	   picture = entry.picture
 	else: picture = ""
@@ -182,8 +183,8 @@ class GetPictureHandler(webapp2.RequestHandler):
 		WritePicToPhone(self, entry)
 
   def post(self):
-	tag = self.request.get('tag')
-	self.get_picture(tag)
+	uuid = self.request.get('uuid')
+	self.get_picture(uuid)
 
   # there is a web ui for this as well, here is the get
   def get(self):
@@ -203,7 +204,6 @@ class MainPage(webapp2.RequestHandler):
 	self.response.out.write(template.render(path,template_values))
 
 #### Utilty procedures for generating the output
-
 def WriteToPhone(handler,tag,value):
  
 	handler.response.headers['Content-Type'] = 'application/jsonrequest'
@@ -258,7 +258,6 @@ def WritePicToPhoneAfterStore(handler, entry):
 	json.dump(["STORED", entry.tag, entry.value, entry.extension], handler.response.out)
 
 # db utilities from Dean
-
 ### A utility that guards against attempts to delete a non-existent object
 def dbSafeDelete(key):
   if db.get(key) :	db.delete(key)
@@ -274,21 +273,21 @@ def store(tag, value, bCheckIfTagExists=True):
 		entry = StoredData(tag = tag, value = value)
 	entry.put()		
 	
-
-def storePic(tag, picture, value, extension,  bCheckIfTagExists=True):
+def storePic(tag, picture, value, extension,  uuid, bCheckIfTagExists=True):
 	if bCheckIfTagExists:
 		# There's a potential readers/writers error here :(
-		entry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", tag).get()
+		entry = db.GqlQuery("SELECT * FROM StoredPicture where uuid = :1", uuid).get()
 		if entry:
 		  # entry.value = value
 		  # entry.extension = extension
 		  return
 		else: 
 			logging.info("The length of the entry is "+str(len(value)))
+			logging.info('The uuid of ths image is'+str(uuid))
 
 			#9000 is the upper limit of the file entry < 1MB
 			if len(value) < 900000:
-				entry = StoredPicture(tag = tag , value = value, extension = extension)
+				entry = StoredPicture(tag = tag , value = value, extension = extension, uuid = uuid)
 				entry.put()
 			else:
 				i = 0
@@ -309,10 +308,10 @@ def storePic(tag, picture, value, extension,  bCheckIfTagExists=True):
 					index = index + 1
 					listOfTag.append(newTag)
 
-				entry = StoredPicture(tag = tag, value = ','.join(listOfTag), extension = extension, split = True)
+				entry = StoredPicture(tag = tag, value = ','.join(listOfTag), extension = extension, uuid = uuid, split = True)
 				entry.put()	
 	else:
-		entry = StoredPicture(tag = tag,  value = value, extension = extension)
+		entry = StoredPicture(tag = tag,  value = value, extension = extension, uuid = uuid)
 		entry.put()	
 
 def trimdb():
@@ -388,6 +387,3 @@ app = webapp2.WSGIApplication ([('/', MainPage),
 				   ('/deleteentry', DeleteEntry),  ('/storeapicture',StoreAPicture)
 
 						   ])
-
-
-
