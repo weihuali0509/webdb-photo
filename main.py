@@ -29,17 +29,23 @@ import urllib
 import logging
 import re
 
+import sys
+import math
+import json
+
 max_entries = 1000
 
 class StoredData(db.Model):
   tag = db.StringProperty()
   value = db.TextProperty()
   date = db.DateTimeProperty(required=True, auto_now=True)
+  
 class StoredPicture(db.Model):
 	tag = db.StringProperty()
 	picture = db.BlobProperty()
 	extension = db.StringProperty()
 	value = db.TextProperty()
+	split = db.BooleanProperty()
 	date = db.DateTimeProperty(required=True, auto_now=True)
 
 	def url_for(self):
@@ -90,8 +96,8 @@ class StoreAPicture(webapp2.RequestHandler):
 	entry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", tag).get()
 	if self.request.get('fmt') == "html":
 		WritePicToWeb(self,entry)
-	else:
-		WritePicToPhoneAfterStore(self,entry)
+	# else:
+	# 	WritePicToPhoneAfterStore(self,entry)
 	
 
   def post(self):
@@ -109,6 +115,7 @@ class StoreAPicture(webapp2.RequestHandler):
 	encoded=encoded.replace(' ','')	
 	encoded=encoded.replace('\"','')
 	encoded += "=" * ((4 - len(encoded) % 4) % 4)
+	logging.info('the tage of image is %s', tag)
 	logging.info('image after padding %s', encoded)
 	try:
 		decoded = base64.b64decode(encoded[:-2])
@@ -116,7 +123,8 @@ class StoreAPicture(webapp2.RequestHandler):
 		decoded=encoded
 
 	logging.info('image after decoding %s', decoded)		
-	self.store_a_picture(tag,decoded, encoded, extension)     
+	self.store_a_picture(tag,decoded, encoded, extension) 
+
 class DeleteEntry(webapp2.RequestHandler):
 
   def post(self):
@@ -162,6 +170,7 @@ class GetPictureHandler(webapp2.RequestHandler):
 	if entry:
 	   picture = entry.picture
 	else: picture = ""
+	
 	if self.request.get('fmt') == "html":
 		WritePicToWeb(self, entry)
 	else:
@@ -220,13 +229,28 @@ def WritePicToPhone(handler, entry):
 	logging.info(entry.tag);
 	logging.info(entry.value);
 	logging.info(entry.extension);
-	json.dump(["PICTURE", entry.tag, entry.value, entry.extension], handler.response.out)
+	logging.info(entry.split);
 
+	if(entry.split != True):
+		json.dump(["PICTURE", entry.tag, entry.value, entry.extension], handler.response.out)
+	else:
+		listOfTag = entry.value.split(',')
+		newValue = ''
+
+		logging.info('The list of tags is '+','.join(listOfTag))
+		for splitTag in listOfTag:
+			splitEntry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", splitTag).get()
+			newValue = newValue + splitEntry.value
+
+		json.dump(["PICTURE", entry.tag, newValue, entry.extension], handler.response.out)	
 
 def WritePicToPhoneAfterStore(handler, entry):
 	handler.response.headers['Content-Type'] = 'application/jsonrequest'
-	json.dump(["STORED", entry.tag, entry.value, entry.extension], handler.response.out)
 
+	logging.info(entry.tag);
+	logging.info(entry.value);
+	logging.info(entry.extension);
+	json.dump(["STORED", entry.tag, entry.value, entry.extension], handler.response.out)
 
 # db utilities from Dean
 
@@ -251,12 +275,42 @@ def storePic(tag, picture, value, extension,  bCheckIfTagExists=True):
 		# There's a potential readers/writers error here :(
 		entry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", tag).get()
 		if entry:
-		  entry.value = value
-		  entry.extension = extension
-		else: entry = StoredPicture(tag = tag , value = value, extension = extension)
+		  # entry.value = value
+		  # entry.extension = extension
+		  return
+		else: 
+			allString = tag + value + extension
+			logging.info("The length of the entry is "+str(len(allString)))
+
+			#9000 is the upper limit of the file entry < 1MB
+			if len(value) < 900000:
+				entry = StoredPicture(tag = tag , value = value, extension = extension)
+				entry.put()
+			else:
+				i = 0
+				j = 0
+				index = 0
+				lengthOfValue = len(value)
+				listOfTag = []
+
+				while i < lengthOfValue:
+					j = i + 900000
+					splitValue = value[i:min(j,lengthOfValue-1)]
+					newTag = tag + str(index)
+
+					entry = StoredPicture(tag = newTag, value = splitValue)
+					entry.put()	
+
+					i = i + j
+					index = index + 1
+					listOfTag.append(newTag)
+
+				entry = StoredPicture(tag = tag, value = ','.join(listOfTag), extension = extension, split = True)
+				entry.put()	
 	else:
 		entry = StoredPicture(tag = tag,  value = value, extension = extension)
-	entry.put()	
+		entry.put()	
+
 def trimdb():
 	## If there are more than the max number of entries, flush the
 	## earliest entries.
