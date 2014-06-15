@@ -82,7 +82,7 @@ class StoreAValue(webapp2.RequestHandler):
 class StoreAPicture(webapp2.RequestHandler):
 
   def store_a_picture(self, tag, picture, val, extension, uuid):
-	storePic(tag, picture, val, extension, uuid)
+	storePic(self, tag, picture, val, extension, uuid)
 	# call trimdb if you want to limit the size of db
 	# trimdb()
 	
@@ -94,12 +94,10 @@ class StoreAPicture(webapp2.RequestHandler):
 	## When I first implemented this, I used  json.JSONEncoder().encode(picture)
 	## rather than json.dump.  That didn't work: the component ended up
 	## seeing extra quotation marks.  Maybe someone can explain this to me.
-	entry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", tag).get()
+	entry = db.GqlQuery("SELECT * FROM StoredPicture where uuid = :1", uuid).get()
 	if self.request.get('fmt') == "html":
 		WritePicToWeb(self,entry)
-	# else:
-	# 	WritePicToPhoneAfterStore(self,entry)
-	
+
   def post(self):
 	tag = self.request.get('tag')
 	picture = self.request.get('pic')
@@ -184,6 +182,7 @@ class GetPictureHandler(webapp2.RequestHandler):
 
   def post(self):
 	uuid = self.request.get('uuid')
+	logging.info('Inside the GetPictureHandler and the uuid received is '+str(uuid))
 	self.get_picture(uuid)
 
   # there is a web ui for this as well, here is the get
@@ -239,23 +238,25 @@ def WritePicToPhone(handler, entry):
 	if(entry.split != True):
 		json.dump(["PICTURE", entry.tag, entry.value, entry.extension], handler.response.out)
 	else:
-		listOfTag = entry.value.split(',')
+		listOfUUID = entry.value.split(',')
 		newValue = ''
 
-		logging.info('The list of tags is '+','.join(listOfTag))
-		for splitTag in listOfTag:
-			splitEntry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", splitTag).get()
+		logging.info('The list of tags is '+','.join(listOfUUID))
+		for splitUUID in listOfUUID:
+			splitEntry = db.GqlQuery("SELECT * FROM StoredPicture where uuid = :1", splitUUID).get()
 			newValue = newValue + splitEntry.value
 
-		json.dump(["PICTURE", entry.tag, newValue, entry.extension], handler.response.out)	
+		json.dump(["PICTURE", entry.uuid, entry.tag, newValue, entry.extension], handler.response.out)	
 
 def WritePicToPhoneAfterStore(handler, entry):
 	handler.response.headers['Content-Type'] = 'application/jsonrequest'
 
-	# logging.info(entry.tag);
-	# logging.info(entry.value);
-	# logging.info(entry.extension);
-	json.dump(["STORED", entry.tag, entry.value, entry.extension], handler.response.out)
+	logging.info('Inside the method WritePicToPhoneAfterStore, the entry value is '+str(entry.value))
+	logging.info('Inside the method WritePicToPhoneAfterStore, the entry uuid is '+str(entry.uuid))
+	logging.info('Inside the method WritePicToPhoneAfterStore, the entry tag is '+str(entry.tag))
+	logging.info('Inside the method WritePicToPhoneAfterStore, the entry split is '+str(entry.split))
+
+	json.dump(["STORED", entry.uuid], handler.response.out)
 
 # db utilities from Dean
 ### A utility that guards against attempts to delete a non-existent object
@@ -273,7 +274,7 @@ def store(tag, value, bCheckIfTagExists=True):
 		entry = StoredData(tag = tag, value = value)
 	entry.put()		
 	
-def storePic(tag, picture, value, extension,  uuid, bCheckIfTagExists=True):
+def storePic(self, tag, picture, value, extension,  uuid, bCheckIfTagExists=True):
 	if bCheckIfTagExists:
 		# There's a potential readers/writers error here :(
 		entry = db.GqlQuery("SELECT * FROM StoredPicture where uuid = :1", uuid).get()
@@ -283,7 +284,7 @@ def storePic(tag, picture, value, extension,  uuid, bCheckIfTagExists=True):
 		  return
 		else: 
 			logging.info("The length of the entry is "+str(len(value)))
-			logging.info('The uuid of ths image is'+str(uuid))
+			logging.info('The uuid of ths image is '+str(uuid))
 
 			#9000 is the upper limit of the file entry < 1MB
 			if len(value) < 900000:
@@ -294,22 +295,29 @@ def storePic(tag, picture, value, extension,  uuid, bCheckIfTagExists=True):
 				j = 0
 				index = 0
 				lengthOfValue = len(value)
-				listOfTag = []
+				listOfUUID = []
 
 				while i < lengthOfValue:
 					j = i + 900000
 					splitValue = value[i:min(j,lengthOfValue)]
-					newTag = tag + str(index)
+					newUUID = uuid + '-'+str(index)
 
-					entry = StoredPicture(tag = newTag, value = splitValue)
+					entry = StoredPicture(uuid = newUUID, value = splitValue)
 					entry.put()	
 
 					i = j
 					index = index + 1
-					listOfTag.append(newTag)
+					listOfUUID.append(newUUID)
 
-				entry = StoredPicture(tag = tag, value = ','.join(listOfTag), extension = extension, uuid = uuid, split = True)
+				logging.info('The list of uuid is '+','.join(listOfUUID))
+				entry = StoredPicture(tag = tag, value = ','.join(listOfUUID), extension = extension, uuid = uuid, split = True)
 				entry.put()	
+
+				logging.info('The uuid of the entry is '+entry.uuid)
+				logging.info('The value of the entry is '+entry.value)
+				logging.info('The split of the entry is '+str(entry.split))
+
+				WritePicToPhoneAfterStore(self,entry)
 	else:
 		entry = StoredPicture(tag = tag,  value = value, extension = extension, uuid = uuid)
 		entry.put()	
