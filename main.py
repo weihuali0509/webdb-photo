@@ -107,7 +107,7 @@ class StoreAPicture(webapp2.RequestHandler):
 
 	extension = self.request.get('ext')
 	# logging.info(extension)
-	
+
 	if self.request.get('fmt') == "html":
 		encoded = picture.encode("base64")
 	else:
@@ -242,7 +242,7 @@ def WritePicToPhone(handler, entry):
 		listOfTag = entry.value.split(',')
 		newValue = ''
 
-		# logging.info('The list of tags is '+','.join(listOfTag))
+		logging.info('The list of tags is '+','.join(listOfTag))
 		for splitTag in listOfTag:
 			splitEntry = db.GqlQuery("SELECT * FROM StoredPicture where tag = :1", splitTag).get()
 			newValue = newValue + splitEntry.value
@@ -284,8 +284,7 @@ def storePic(tag, picture, value, extension,  bCheckIfTagExists=True):
 		  # entry.extension = extension
 		  return
 		else: 
-			allString = tag + value + extension
-			# logging.info("The length of the entry is "+str(len(allString)))
+			logging.info("The length of the entry is "+str(len(value)))
 
 			#9000 is the upper limit of the file entry < 1MB
 			if len(value) < 900000:
@@ -300,13 +299,13 @@ def storePic(tag, picture, value, extension,  bCheckIfTagExists=True):
 
 				while i < lengthOfValue:
 					j = i + 900000
-					splitValue = value[i:min(j,lengthOfValue-1)]
+					splitValue = value[i:min(j,lengthOfValue)]
 					newTag = tag + str(index)
 
 					entry = StoredPicture(tag = newTag, value = splitValue)
 					entry.put()	
 
-					i = i + j
+					i = j
 					index = index + 1
 					listOfTag.append(newTag)
 
@@ -381,8 +380,8 @@ class ImageHandler(webapp2.RequestHandler):
 		if requestedImage is not None:
 			self.response.headers['Content-Type'] = 'image/jpeg'
 			self.response.out.write(requestedImage.picture)
-### Assign the classes to the URL's
 
+### Assign the classes to the URL's
 app = webapp2.WSGIApplication ([('/', MainPage),
 						   ('/getvalue', GetValueHandler),('/image/(\d+)', ImageHandler), 
 			   ('/storeavalue', StoreAValue), ('/getpicture', GetPictureHandler),
